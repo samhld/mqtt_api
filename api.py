@@ -1,4 +1,5 @@
 import os
+import random
 from fastapi import FastAPI
 from influxdb_client import InfluxDBClient, Point
 
@@ -67,3 +68,9 @@ def read_last_cpu(device_id):
                 '|> last()'
 
     return query_api.query(flux)
+
+
+@app.post("/devices/{device_id}/cpu")
+def write_cpu(device_id, value, timestamp):
+    point = Point("cpu").tag("host", f"{device_id}").field("usage_user", value))
+    write_api.write(bucket="mqtt", record=point)
