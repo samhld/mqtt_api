@@ -1,12 +1,11 @@
 import os
 import random
 import json
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Form
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from influxdb_client import InfluxDBClient, Point
-
-templates = Jinja2Templates(directory="templates")
 
 INFLUX_HOST = os.environ["INFLUX_HOST"]
 INFLUX_TOKEN = os.environ["INFLUX_TOKEN"]
@@ -20,9 +19,16 @@ query_api = influx_client.query_api()
 
 app = FastAPI()
 
+templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="./static"), name="static")
+
 # base_api = "/api/v2"
 base_flux = 'from(bucket: "mqtt")'\
             '   |> range(start: -10m)'
+
+@app.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    return templates.TemplateResponse("home.html", {"request": request})
 
 '''
 Endpoints below (and above the PUBLISH ones) are   
@@ -36,19 +42,14 @@ def read_mean_cpu(request: Request, device_id):
                f'|> filter(fn: (r) => r.host == "{device_id}")'\
                 '|> filter(fn: (r) => r.cpu == "cpu-total")'\
                 '|> filter(fn: (r) => r._field == "usage_user")'\
-                '|> mean()'
+                '|> mean()'\
+                '|> duplicate(column: "_stop", as: "_time")'\
+                '|> keep(columns: ["_value", "_time"])'\
+                '|> rename(columns: {_value: "mean_usage_user"})'
 
-    # tables = query_api.query(flux)
-    # data = []
-    # for table in tables:
-    #     rows = []
-    #     for row in table.records:
-    #         rows.append(row.values)
-    #     data.append(rows)
     df = query_api.query_data_frame(flux)
-    # render_df = df.to_html()
 
-    return templates.TemplateResponse("home.html", {"request": request, "data": df.to_html()})
+    return templates.TemplateResponse("endpoint.html", {"request": request, "data": df.to_html(), "device_id": device_id})
 
 @app.get("/devices/{device_id}/cpu/last", response_class=HTMLResponse)
 def read_last_cpu(request: Request, device_id: str):
@@ -59,9 +60,9 @@ def read_last_cpu(request: Request, device_id: str):
                 '|> filter(fn: (r) => r._field == "usage_user")'\
                 '|> last()'
 
-    df = query_api.query_dataframe(flux)
+    df = query_api.query_data_frame(flux)
 
-    return templates.TemplateResponse("home.html", {"request": request, "data": df.to_string()})
+    return templates.TemplateResponse("endpoint.html", {"request": request, "data": df.to_html(), "device_id": device_id})
 
 @app.get("/devices/{device_id}/mem/average", response_class=HTMLResponse)
 def read_last_cpu(request: Request, device_id: str):
@@ -72,9 +73,9 @@ def read_last_cpu(request: Request, device_id: str):
                 '|> filter(fn: (r) => r._field == "usage_user")'\
                 '|> mean()'
 
-    data = query_api.query(flux)
+    df = query_api.query_data_frame(flux)
 
-    return templates.TemplateResponse("home.html", {"request": request, "data": data})
+    return templates.TemplateResponse("endpoint.html", {"request": request, "data": df.to_html(), "device_id": device_id})
 
 @app.get("/devices/{device_id}/mem/last", response_class=HTMLResponse)
 def read_last_cpu(request: Request, device_id):
@@ -85,9 +86,31 @@ def read_last_cpu(request: Request, device_id):
                 '|> filter(fn: (r) => r._field == "usage_user")'\
                 '|> last()'
 
-    data = query_api.query(flux)
+    df = query_api.query_data_frame(flux)
 
-    return templates.TemplateResponse("home.html", {"request": request, "data": data})
+    return templates.TemplateResponse("endpoint.html", {"request": request, "data": df.to_html(), "device_id": device_id})
+
+@app.post("/")
+def handle_form_data(request: Request,
+                     device_id: str=Form(...), 
+                     metric: str=Form(...), 
+                     function: str=Form(...)):
+
+    if metric == "cpu":
+        if function in ("mean", "average"):
+            read_mean_cpu(device_id)
+        elif function == "last":
+            read_last_cpu(device_id)
+    elif metric in ("mem", "memory"):
+        if function in ("mean", "average"):
+            read_mean_mem(device_id)
+        elif function == "last":
+            read_last_mem(device_id)
+        else:
+            return "Function not available"
+    else:
+        return "Metric not available"
+
 
 @app.post("/devices/{device_id}/cpu")
 def write_cpu(device_id, value, timestamp):
