@@ -48,8 +48,9 @@ def read_mean_cpu(request: Request, device_id):
                 '|> rename(columns: {_value: "mean_usage_user"})'
 
     df = query_api.query_data_frame(flux)
+    topic = f"/devices/{device_id}/cpu/average"
 
-    return templates.TemplateResponse("endpoint.html", {"request": request, "data": df.to_html(), "device_id": device_id})
+    return templates.TemplateResponse("endpoint.html", {"request": request, "data": df.to_html(), "device_id": device_id, "topic": topic})
 
 @app.get("/devices/{device_id}/cpu/last", response_class=HTMLResponse)
 def read_last_cpu(request: Request, device_id: str):
@@ -61,8 +62,9 @@ def read_last_cpu(request: Request, device_id: str):
                 '|> last()'
 
     df = query_api.query_data_frame(flux)
+    topic = f"/devices/{device_id}/cpu/last"
 
-    return templates.TemplateResponse("endpoint.html", {"request": request, "data": df.to_html(), "device_id": device_id})
+    return templates.TemplateResponse("endpoint.html", {"request": request, "data": df.to_html(), "device_id": device_id, "topic": topic})
 
 @app.get("/devices/{device_id}/mem/average", response_class=HTMLResponse)
 def read_last_cpu(request: Request, device_id: str):
@@ -74,8 +76,9 @@ def read_last_cpu(request: Request, device_id: str):
                 '|> mean()'
 
     df = query_api.query_data_frame(flux)
+    topic = f"/devices/{device_id}/mem/average"
 
-    return templates.TemplateResponse("endpoint.html", {"request": request, "data": df.to_html(), "device_id": device_id})
+    return templates.TemplateResponse("endpoint.html", {"request": request, "data": df.to_html(), "device_id": device_id, "topic": topic})
 
 @app.get("/devices/{device_id}/mem/last", response_class=HTMLResponse)
 def read_last_cpu(request: Request, device_id):
@@ -87,8 +90,9 @@ def read_last_cpu(request: Request, device_id):
                 '|> last()'
 
     df = query_api.query_data_frame(flux)
+    topic = f"/devices/{device_id}/mem/last"
 
-    return templates.TemplateResponse("endpoint.html", {"request": request, "data": df.to_html(), "device_id": device_id})
+    return templates.TemplateResponse("endpoint.html", {"request": request, "data": df.to_html(), "device_id": device_id, "topic": topic})
 
 @app.post("/")
 def handle_form_data(request: Request,
